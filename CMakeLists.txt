@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.10)
+
+project(MoteusHardwareInterface VERSION 1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include_directories(
+    ${CMAKE_SOURCE_DIR}/includes
+)
+
+find_package(Threads REQUIRED)
+
+add_executable(read
+    tests/read.cpp
+)
+target_link_libraries(read PRIVATE Threads::Threads)
+
+add_executable(velocity_control
+    tests/velocity_control.cpp
+)
+target_link_libraries(velocity_control PRIVATE Threads::Threads)
