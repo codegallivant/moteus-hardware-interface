@@ -15,10 +15,10 @@ MOTEUS_ARGS=()
 
 # Format: "Test Name:binary_name arguments"
 tests=(
-  "Velocity Control:write --position nan --velocity 2.0 --duration-ms 3000"
-  "Constant Acceleration Trajectory:write --position 1.0 --velocity 0.0 --accel-limit 2.0 --velocity-limit 0.5 --duration-ms 2000"
-  "Torque Control:write --velocity 0.0 --kp-scale 0.0 --kd-scale 0.0 --ilimit-scale 0.0 --feedforward-torque 0.1 --duration-ms 1000"
-  "Read:read"
+  "Read:read --duration-ms 10000"
+  "Velocity Control:write --position nan --velocity 2.0 --duration-ms 5000 --kp-scale 0.1 --kd-scale 0.1"
+  "Constant Acceleration Trajectory:write --position 1.0 --velocity 0.0 --accel-limit 2.0 --velocity-limit 0.5 --duration-ms 5000 --kp-scale 0.1 --kd-scale 0.1"
+  "Torque Control:write --velocity 0.0 --kp-scale 0.0 --kd-scale 0.0 --ilimit-scale 0.0 --feedforward-torque 0.1 --duration-ms 1000 --kp-scale 0.1 --kd-scale 0.1"
 )
 
 usage() {

@@ -3,11 +3,19 @@
 #include <vector>
 #include <memory>
 #include <optional>
-
+#include <csignal>
 #include "api/moteus_driver_controller.hpp"
 #include "lib/cxxopts.hpp"
 
+
+void signalHandler(int signum) {
+    MoteusDriverController::destroyAll();
+}
+
 int main(int argc, char** argv) {
+
+    std::signal(SIGINT, signalHandler);
+
     cxxopts::Options options("MoteusRead", "Read Moteus Controller State");
     options.allow_unrecognised_options();
 
@@ -36,6 +44,9 @@ int main(int argc, char** argv) {
         ("socketcan-ignore-errors", "Ignore SocketCAN errors", cxxopts::value<int>()->default_value("0"))
         ("can-disable-brs", "Disable CAN BRS (bit-rate switching)", cxxopts::value<int>()->default_value("0"))
 
+        // Timing (Keep as int)
+        ("duration-ms", "Duration in milliseconds", cxxopts::value<int>())
+
         ("h,help", "Print usage");
 
     auto result = options.parse(argc, argv);
@@ -50,7 +61,7 @@ int main(int argc, char** argv) {
     int socketcan_ignore_errors = result["socketcan-ignore-errors"].as<int>();
     int socketcan_disable_brs = result["can-disable-brs"].as<int>();
 
-    auto mc = std::make_unique<MoteusDriverController>(
+    MoteusDriverController* mc = MoteusDriverController::create(
         moteus_id,
         socketcan_iface,
         socketcan_ignore_errors,
@@ -84,12 +95,37 @@ int main(int argc, char** argv) {
 
     if (readState.empty()) {
         readState["position"] = std::nullopt;
-        readState["velocity"] = std::nullopt;
-        readState["torque"] = std::nullopt;
-        readState["temperature"] = std::nullopt;
-        readState["voltage"] = std::nullopt;
+        // readState["velocity"] = std::nullopt;
+        // readState["torque"] = std::nullopt;
+        // readState["temperature"] = std::nullopt;
+        // readState["voltage"] = std::nullopt;
     }
 
+    std::cout << "Sending query..." << std::endl;
+
+    if(result.count("duration-ms")) {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        bool status = false;
+        int count = 0;
+        int elapsed_time_count = 0;
+        while (true) {
+            if (elapsed_time_count >= result["duration-ms"].as<int>()) {
+                break;
+            }
+            auto start_time = std::chrono::high_resolution_clock::now();
+            status = mc->read(readState);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            if(status) {
+                count++;
+            } else {
+                return 0;
+            }
+
+            auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+            elapsed_time_count += elapsed_time.count();
+        }
+        std::cout <<  "Frequency (successful reads per second): " << count/(static_cast<double>(elapsed_time_count)/1000) << std::endl;
+    }
     bool status = mc->read(readState);
     if(status) {
         MoteusDriverController::displayState(readState);
@@ -97,5 +133,6 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to read" << std::endl;
         return 1;
     }
+
     return 0;
 }

@@ -5,18 +5,20 @@
 #include <memory>
 #include <iostream>
 #include <string>
+#include <signal.h>
 
 
 class MoteusDriverController {
 public:
+    inline static std::vector<std::unique_ptr<MoteusDriverController>> registry{};
+
     typedef std::unordered_map<std::string, std::optional<double>> motor_state; 
     std::unique_ptr<mjbots::moteus::Controller> controller;
 
     MoteusDriverController(int moteus_id = 1, std::string socketcan_iface = "can0", int socketcan_ignore_errors = 0, int socketcan_disable_brs = 0) {
-
         mjbots::moteus::Controller::Options options;
         options.id = moteus_id;
-        options.default_query = true; // Whether to get read response after writing for every command
+        options.default_query = false; // Whether to get read response after writing for every command
 
         std::vector<std::string> transport_args = {
             "--socketcan-iface", socketcan_iface,
@@ -25,7 +27,7 @@ public:
         };
         auto transport = mjbots::moteus::Controller::MakeSingletonTransport(transport_args);
         options.transport = transport;
-
+        
         // options.position_format.kp_scale = mjbots::moteus::kFloat;
         // options.position_format.kd_scale = mjbots::moteus::kFloat;
         // options.position_format.ilimit_scale = mjbots::moteus::kFloat;
@@ -33,7 +35,6 @@ public:
 
         this->controller = std::make_unique<mjbots::moteus::Controller>(options);
         this->controller->SetStop();
-
     }
 
     mjbots::moteus::Query::Format getReadFormat(motor_state readState) {
@@ -124,7 +125,7 @@ public:
         }
     }
 
-    void modifyCommand(mjbots::moteus::PositionMode::Command& cmd, motor_state state) {
+    void modifyCommand(mjbots::moteus::PositionMode::Command& cmd, const motor_state& state) {
         for (auto it = state.begin(); it != state.end(); ++it) {
             // std::cout << "Key: " << it->first << std::endl;
             double value;
@@ -161,15 +162,15 @@ public:
         }
     }
 
-    mjbots::moteus::PositionMode::Command createCommand(motor_state state) {
+    mjbots::moteus::PositionMode::Command createCommand(const motor_state& state) {
         mjbots::moteus::PositionMode::Command cmd;
         modifyCommand(cmd, state);
         return cmd;
     }
 
     bool read(motor_state& readState) {
-        auto qcom = getReadFormat(readState);
-        const auto result = this->controller->SetQuery(&qcom);
+        auto q_com = getReadFormat(readState);
+        const auto result = this->controller->SetQuery(&q_com);
         if(!result) {
             return false;
         }
@@ -177,7 +178,7 @@ public:
         return true;
     }
 
-    bool write(motor_state state, motor_state& readState) {
+    mjbots::moteus::PositionMode::Format getCommandFormat(const motor_state& state) {
         mjbots::moteus::PositionMode::Format res; // Format in which command is given (i.e. to write in)
         res.position = mjbots::moteus::Resolution::kIgnore;
         res.velocity = mjbots::moteus::Resolution::kIgnore;
@@ -209,27 +210,42 @@ public:
                 std::cout << "WARNING: Unrecognized keyword " << it->first << std::endl;
             }
         }
-        auto qcom = getReadFormat(readState);
-        auto result = this->controller->SetPosition(createCommand(state), &res, &qcom);  
+        return res;
+    }
+
+    bool write(const motor_state& state, motor_state& readState) {
+        auto res = getCommandFormat(state);
+        auto q_com = getReadFormat(readState);
+        auto result = this->controller->SetPosition(createCommand(state), &res, &q_com);  
         if(!result) {
             return false;
         } 
         populateReadState(readState, result->values);
         return true;
     }
+    
+    void write(const motor_state& state) {
+        auto res = getCommandFormat(state);
+        auto result = this->controller->SetPosition(createCommand(state), &res);  
+    }
 
-    bool writeDuration(motor_state state, motor_state& responseState, int duration_ms) {
+    void writeDuration(const motor_state& state, int duration_ms) {
         auto start_time = std::chrono::high_resolution_clock::now();
         bool status;
+        int count = 0;
+        int elapsed_time_count = 0;
         while (true) {
-            auto current_time = std::chrono::high_resolution_clock::now();
-            auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
-            if (elapsed_time.count() >= duration_ms) {
+            if (elapsed_time_count >= duration_ms) {
                 break;
             }
-            status = this->write(state, responseState);
+            auto start_time = std::chrono::high_resolution_clock::now();
+            this->write(state);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            count++;
+            auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+            elapsed_time_count += elapsed_time.count();
         }
-        return status;
+        std::cout <<  "Control Frequency (successful writes per second): " << count/(static_cast<double>(elapsed_time_count)/1000) << std::endl;
     }
 
     static void displayState(const std::unordered_map<std::string, std::optional<double>>& m) {
@@ -245,7 +261,35 @@ public:
         }
     }
 
-    ~MoteusDriverController() {
+    void terminate() {
         this->controller->SetStop();
+    }
+
+    ~MoteusDriverController() {
+        terminate();
+    }
+
+
+    // If opting for central memory control
+
+    static MoteusDriverController* create(
+        int moteus_id = 1,
+        std::string socketcan_iface = "can0",
+        int socketcan_ignore_errors = 0,
+        int socketcan_disable_brs = 0)
+    {
+        MoteusDriverController::registry.push_back(std::make_unique<MoteusDriverController>(
+            moteus_id,
+            socketcan_iface,
+            socketcan_ignore_errors,
+            socketcan_disable_brs
+        ));
+        return registry.back().get();
+    }
+
+
+    static void destroyAll() {
+        std::cout << "Resetting all Moteus Driver Controllers" << std::endl;
+        MoteusDriverController::registry.clear();
     }
 };

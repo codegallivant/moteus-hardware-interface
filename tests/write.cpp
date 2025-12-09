@@ -5,11 +5,20 @@
 #include <limits>
 #include <vector>
 #include <optional>
+#include <csignal>
 
 #include "api/moteus_driver_controller.hpp"
 #include "lib/cxxopts.hpp" 
 
+
+void signalHandler(int signum) {
+    MoteusDriverController::destroyAll();
+}
+
 int main(int argc, char** argv) {
+
+    std::signal(SIGINT, signalHandler);
+
     cxxopts::Options options("MoteusWrite", "Write commands Moteus via CLI");
 
     options.allow_unrecognised_options();
@@ -57,7 +66,7 @@ int main(int argc, char** argv) {
     int socketcan_ignore_errors = result["socketcan-ignore-errors"].as<int>();
     int socketcan_disable_brs = result["can-disable-brs"].as<int>();
 
-    auto mc = std::make_unique<MoteusDriverController>(
+    MoteusDriverController* mc = MoteusDriverController::create(
         moteus_id,
         socketcan_iface,
         socketcan_ignore_errors,
@@ -116,23 +125,18 @@ int main(int argc, char** argv) {
 
         std::cout << "Sending command..." << std::endl;
 
+        bool status;
         if (result.count("duration-ms")) {
-            int duration = result["duration-ms"].as<int>();
-            
-            if (mc->writeDuration(writeState, readState, duration)) {
-                std::cout << "Duration command completed." << std::endl;
-                MoteusDriverController::displayState(readState);
-            } else {
-                std::cerr << "Write failed" << std::endl;
-            }
+            int duration = result["duration-ms"].as<int>();            
+            mc->writeDuration(writeState, duration);
         } else {
-            if (mc->write(writeState, readState)) {
-                MoteusDriverController::displayState(readState);
+            status = mc->write(writeState, readState);
+            if(status) {
+                    MoteusDriverController::displayState(readState);
             } else {
                 std::cerr << "Write failed" << std::endl;
             }
         }
     }
-
     return 0;
 }
