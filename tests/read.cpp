@@ -11,7 +11,7 @@
 #include "lib/cxxopts.hpp"
 
 void signalHandler(int signum) {
-    MoteusDriverController::destroyAll();
+    MoteusAPI::Controller::destroyAll();
 }
 
 int main(int argc, char** argv) {
@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
 
     struct ControllerEntry {
         int id;
-        MoteusDriverController* mc;
+        MoteusAPI::Controller* mc;
     };
 
     std::vector<ControllerEntry> controllers;
@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
 
     // Instantiate K controllers
     for (int mid : moteus_ids) {
-        MoteusDriverController* mc = MoteusDriverController::create(
+        MoteusAPI::Controller* mc = MoteusAPI::Controller::create(
             mid,
             socketcan_iface,
             socketcan_ignore_errors,
@@ -99,11 +99,11 @@ int main(int argc, char** argv) {
         controllers.push_back({mid, mc});
     }
 
-    MoteusDriverController::motor_state readState;
+    std::unordered_map<std::string, bool> flags;
 
     auto check_and_add = [&](const std::string& flag, const std::string& key) {
         if (result.count(flag)) {
-            readState[key] = std::nullopt;
+            flags[key] = true;
         }
     };
 
@@ -124,13 +124,31 @@ int main(int argc, char** argv) {
     check_and_add("trajectory-complete","trajectory_complete");
     check_and_add("voltage",            "voltage");
 
-    if (readState.empty()) {
-        readState["position"] = std::nullopt;
+    if (flags.empty()) {
+        flags["position"] = true;
     }
+
+    MoteusAPI::ReadState rs({
+        .abs_position        = flags["abs-position"],
+        .aux1_gpio           = flags["aux1-gpio"],
+        .aux2_gpio           = flags["aux2-gpio"],
+        .d_current           = flags["d-current"],
+        .fault               = flags["fault"],
+        .home_state          = flags["home-state"],
+        .mode                = flags["mode"],
+        .motor_temperature   = flags["motor-temperature"],
+        .position            = flags["position"],
+        .power               = flags["power"],
+        .q_current           = flags["q-current"],
+        .temperature         = flags["temperature"],
+        .torque              = flags["torque"],
+        .trajectory_complete = flags["trajectory-complete"],
+        .velocity            = flags["velocity"],
+        .voltage             = flags["voltage"]
+    });
 
     std::cout << "Sending query..." << std::endl;
 
-    // auto q_com = controllers.front().mc->getReadFormat(readState);
     if (result.count("duration-ms")) {
         auto duration_ms = result["duration-ms"].as<int>();
         int total_successful_queries = 0;
@@ -141,7 +159,7 @@ int main(int argc, char** argv) {
             }
             for (auto& entry : controllers) {
                 auto start_time = std::chrono::high_resolution_clock::now();
-                auto result_q = entry.mc->read(readState); 
+                auto result_q = entry.mc->read(rs); 
                 // const auto result_q = entry.mc->controller->SetQuery(&q_com);
                 auto end_time = std::chrono::high_resolution_clock::now();
                 int this_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -166,10 +184,10 @@ int main(int argc, char** argv) {
     // Final read from all controllers one after the other
     bool overall_status = true;
     for (const auto& entry : controllers) {
-        bool status = entry.mc->read(readState);
+        bool status = entry.mc->read(rs);
         if (status) {
             std::cout << "\n=== Moteus ID " << entry.id << " ===" << std::endl;
-            MoteusDriverController::displayState(readState);
+            rs.display();
         } else {
             std::cerr << "Failed to read from moteus ID " << entry.id << std::endl;
             overall_status = false;

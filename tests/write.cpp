@@ -13,7 +13,7 @@
 
 
 void signalHandler(int signum) {
-    MoteusDriverController::destroyAll();
+    MoteusAPI::Controller::destroyAll();
 }
 
 int main(int argc, char** argv) {
@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
 
     struct ControllerEntry {
         int id;
-        MoteusDriverController* mc;
+        MoteusAPI::Controller* mc;
     };
 
     std::vector<ControllerEntry> controllers;
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
 
     // Instantiate K controllers
     for (int mid : moteus_ids) {
-        MoteusDriverController* mc = MoteusDriverController::create(
+        MoteusAPI::Controller* mc = MoteusAPI::Controller::create(
             mid,
             socketcan_iface,
             socketcan_ignore_errors,
@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
         controllers.push_back({mid, mc});
     }
 
-    MoteusDriverController::motor_state writeState;
+    std::unordered_map<std::string, double> writeValues;
 
     auto add = [&](std::string cli_flag, std::string map_key) {
         if (result.count(cli_flag)) {
@@ -113,38 +113,62 @@ int main(int argc, char** argv) {
                 [](unsigned char c){ return std::tolower(c); });
 
             if (val_lower == "nan") {
-                writeState[map_key] = std::numeric_limits<double>::quiet_NaN();
+                writeValues[map_key] = std::numeric_limits<double>::quiet_NaN();
             } else {
                 try {
-                    writeState[map_key] = std::stod(val);
+                    writeValues[map_key] = std::stod(val);
                 } catch (const std::exception& e) {
                     std::cerr << "Error parsing argument '" << cli_flag
-                              << "': " << e.what() << std::endl;
+                            << "': " << e.what() << std::endl;
                 }
             }
         }
     };
 
     // args mapping
-    add("position",         "position");
-    add("velocity",         "velocity");
-    add("stop-position",    "stop_position");
-    
-    add("accel-limit",      "accel_limit");
-    add("velocity-limit",   "velocity_limit");
-    add("max-torque",       "maximum_torque");
+    add("position",          "position");
+    add("velocity",          "velocity");
+    add("stop-position",     "stop_position");
+
+    add("accel-limit",       "accel_limit");
+    add("velocity-limit",    "velocity_limit");
+    add("max-torque",        "maximum_torque");
 
     add("feedforward-torque","feedforward_torque");
-    add("kp-scale",         "kp_scale");
-    add("kd-scale",         "kd_scale");
-    add("ilimit-scale",     "ilimit_scale");
+    add("kp-scale",          "kp_scale");
+    add("kd-scale",          "kd_scale");
+    add("ilimit-scale",      "ilimit_scale");
 
-    add("watchdog",         "watchdog_timeout");
+    add("watchdog",          "watchdog_timeout");
 
-    if (writeState.empty()) {
+    if (writeValues.empty()) {
         std::cout << "No motor commands provided. (Use --help to see options)" << std::endl;
     } else {
         std::cout << "Sending command..." << std::endl;
+
+        auto getOpt = [&](const char* key) -> std::optional<double> {
+            auto it = writeValues.find(key);
+            if (it == writeValues.end()) {
+                return std::nullopt;
+            }
+            return it->second;
+        };
+
+        MoteusAPI::CommandState cs({
+            .accel_limit        = getOpt("accel_limit"),
+            .feedforward_torque = getOpt("feedforward_torque"),
+            .ilimit_scale       = getOpt("ilimit_scale"),
+            .kp_scale           = getOpt("kp_scale"),
+            .kd_scale           = getOpt("kd_scale"),
+            .maximum_torque     = getOpt("maximum_torque"),
+            .position           = getOpt("position"),
+            .stop_position      = getOpt("stop_position"),
+            .watchdog_timeout   = getOpt("watchdog_timeout"),
+            .velocity           = getOpt("velocity"),
+            .velocity_limit     = getOpt("velocity_limit"),
+        });
+
+
 
         if (result.count("duration-ms")) {
             int duration = result["duration-ms"].as<int>();            
@@ -161,7 +185,7 @@ int main(int argc, char** argv) {
                     // std::cout << "  Moteus ID " << entry.id
                     //         << " for " << duration << " ms" << std::endl;
                     // entry.mc->writeDuration(writeState, duration);
-                    entry.mc->write(writeState);
+                    entry.mc->write(cs);
                 }
                 auto end_time = std::chrono::high_resolution_clock::now();
                 count += controllers.size();
@@ -175,15 +199,14 @@ int main(int argc, char** argv) {
             // Apply write to all controllers one after the other
             for (auto& entry : controllers) {
                 // Per-controller readback
-                MoteusDriverController::motor_state readState = {
-                    {"position", std::nullopt},
-                    // add more if you later want them
-                };
+                MoteusAPI::ReadState rs({
+                    .position = true
+                });
 
-                bool status = entry.mc->write(writeState, readState);
+                bool status = entry.mc->write(cs, rs);
                 if (status) {
                     std::cout << "\n=== Moteus ID " << entry.id << " ===" << std::endl;
-                    MoteusDriverController::displayState(readState);
+                    rs.display();
                 } else {
                     std::cerr << "Write failed for moteus ID " << entry.id << std::endl;
                     overall_status = false;
