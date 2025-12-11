@@ -1,33 +1,28 @@
 cmake_minimum_required(VERSION 3.10)
-
 project(MoteusAPI VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(
-    ${CMAKE_SOURCE_DIR}/include
-)
+option(BUILD_EXAMPLES "Build example executables" ON)
+option(BUILD_TESTS    "Build test executables"    ON)
 
-find_package(Threads REQUIRED)
+# Helper to set per-target runtime dir
+function(set_runtime_dir target outdir)
+    set_target_properties(${target} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${outdir}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/${outdir}"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/${outdir}"
+    )
+endfunction()
 
-add_executable(read
-    tests/read.cpp
-    src/moteus_api.cpp
-)
-target_link_libraries(read PRIVATE Threads::Threads)
+# Add subdirs
+add_subdirectory(src)
 
-add_executable(write
-    tests/write.cpp
-    src/moteus_api.cpp
-)
+if(BUILD_TESTS)
+  add_subdirectory(tests)
+endif()
 
-# add_executable(load
-#     scripts/load.cpp
-    # includes/moteus/api/moteus_api.cpp
-# )
-
-add_executable(sample
-    examples/sample.cpp
-    src/moteus_api.cpp
-)
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()

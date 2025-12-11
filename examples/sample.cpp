@@ -15,6 +15,7 @@ int main() {
     MoteusAPI::Controller* controller1 = MoteusAPI::Controller::create(1, "can0");
     MoteusAPI::Controller* controller2 = MoteusAPI::Controller::create(2, "can0");
 
+
     // Specify which parameters should be read
     MoteusAPI::ReadState rs({
         .d_current = true,
@@ -33,6 +34,7 @@ int main() {
     std::cout << "Read Data:" << std::endl;
     rs.display();
 
+
     // Sending constant velocity command for 5 seconds to both controllers
     auto start_time = std::chrono::high_resolution_clock::now();
     int elapsed_time_count = 0;
@@ -47,6 +49,7 @@ int main() {
         
         controller1->write(cs);
         controller2->write(cs);
+
         // Can also write and fetch read response
         // controller->write(cs, rs);
 

@@ -326,4 +326,12 @@ void Controller::writeDuration(const CommandState& cs, int duration_ms) {
               << count / (elapsed / 1000.0) << std::endl;
 }
 
+std::string Controller::diagnosticCommand(std::string message) {
+   return this->internal_controller->DiagnosticCommand(message);
+}
+
+void Controller::setZeroOffset() {
+    std::string output = this->diagnosticCommand("d rezero");
+}
+
 } // namespace MoteusAPI

@@ -1,6 +1,6 @@
 # moteus-api
 
-C++ API to read and write data with moteus servo controllers.
+C++ API to read and write data with moteus servo controllers. Layered over moteus drivers.
 
 ## Library Usage
 Examples can be found in `examples/`.
@@ -72,13 +72,16 @@ int main() {
 ```
 2. Run Tests
 ```bash
-./tests.sh --socketcan-iface can0 --moteus-id 1
+./tests.sh --socketcan-iface can0 --moteus-id "1"
+
+# if using multiple moteus on the same bus-
+./tests.sh --socketcan-iface can0 --moteus-id "1 6 3 ..."
 ```
-This will run velocity control, constant acceleration trajectory and torque control tests.
-![example tests output](docs/image.png)
+This will run read, velocity control, constant acceleration trajectory and torque control tests.
+![example tests output](docs/assets/image.png)
 3. Further, you can send custom read/write commands via CLI
 ```bash
 cd build
 ./read --help 
-./write -- help
+./write --help
 ```

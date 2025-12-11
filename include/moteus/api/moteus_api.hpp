@@ -202,6 +202,10 @@ namespace MoteusAPI {
         void write(const CommandState& cs);
 
         void writeDuration(const CommandState& cs, int duration_ms);
+
+        std::string diagnosticCommand(std::string);
+
+        void setZeroOffset();
     };
 
 } // namespace MoteusAPI
