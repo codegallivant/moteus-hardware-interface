@@ -11,7 +11,7 @@
 #include <chrono>
 
 #include "moteus/api/moteus_api.hpp"
-#include "lib/cxxopts.hpp"
+#include "cxxopts.hpp"
 
 void signalHandler(int) {
     MoteusAPI::Controller::destroyAll();

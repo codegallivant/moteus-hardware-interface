@@ -1,12 +1,3 @@
-# moteus-api
-
-C++ API to read and write data with moteus servo controllers.
-
-## Library Usage
-Examples can be found in `examples/`.
-```cpp
-// Example implementing read operations and velocity control on 2 controllers
-
 #include "moteus/api/moteus_api.hpp" // Make sure to have the relevant moteus_api.hpp, moteus_api.cpp and moteus drivers present at appropriate paths
 #include <csignal>
 #include <chrono>
@@ -48,10 +39,10 @@ int main() {
     while(elapsed_time_count <= 5000) {
         
         MoteusAPI::CommandState cs({
-            .position = std::numeric_limits<double>::quiet_NaN(),
-            .velocity = 2.0,
             .kp_scale = 0.1,
             .kd_scale = 0.1,
+            .position = std::numeric_limits<double>::quiet_NaN(),
+            .velocity = 2.0,
         });
         
         controller1->write(cs);
@@ -60,25 +51,6 @@ int main() {
         // controller->write(cs, rs);
 
         auto current_time = std::chrono::high_resolution_clock::now();
-        elapsed_time_count += std::chrono::duration_cast<std::chrono::milliseconds>(loop_end - loop_start).count();
+        elapsed_time_count += std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
     }
 }
-```
-
-## Test your Moteus via CLI
-1. Build
-```bash
-./build.sh
-```
-2. Run Tests
-```bash
-./tests.sh --socketcan-iface can0 --moteus-id 1
-```
-This will run velocity control, constant acceleration trajectory and torque control tests.
-![example tests output](docs/image.png)
-3. Further, you can send custom read/write commands via CLI
-```bash
-cd build
-./read --help 
-./write -- help
-```
