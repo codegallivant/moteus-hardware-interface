@@ -1,5 +1,6 @@
+
 mkdir -p build
 cd build
-cmake ..
 make clean
+cmake "$@" .. 
 make -j $(nproc)

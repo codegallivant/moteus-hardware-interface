@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_EXAMPLES "Build example executables" ON)
 option(BUILD_TESTS    "Build test executables"    ON)
+option(BUILD_SCRIPTS  "Build custom script executables" OFF)
 
 # Helper to set per-target runtime dir
 function(set_runtime_dir target outdir)
@@ -19,6 +20,10 @@ endfunction()
 # Add subdirs
 add_subdirectory(src)
 
+if(BUILD_SCRIPTS)
+  add_subdirectory(scripts)
+endif()
+
 if(BUILD_TESTS)
   add_subdirectory(tests)
 endif()
@@ -26,3 +31,4 @@ endif()
 if(BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
+
