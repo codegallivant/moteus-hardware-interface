@@ -50,6 +50,15 @@ namespace MoteusAPI {
         bool voltage = false;
     };
 
+    typedef struct ViolationStats {
+        double current;
+        bool motor_current_condition;
+        bool moteus_current_condition;
+        bool d_current_condition;
+        bool fault_condition;
+        bool result;
+    } ViolationStats;
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -57,13 +66,14 @@ namespace MoteusAPI {
     template<typename T>
     void displayPtrMap(std::unordered_map<std::string, T*> m) {
         for (const auto& [key, opt_val] : m) {
-            std::cout << key << ": ";
             if (opt_val && opt_val->has_value()) {
+                std::cout << key << ": ";
                 std::cout << opt_val->value();
-            } else {
-                std::cout << "null";
-            }
-            std::cout << "\n";
+                std::cout << "\n";
+            } 
+            // else {
+            //     std::cout << "null";
+            // }
         }
     }
 
@@ -90,8 +100,8 @@ namespace MoteusAPI {
         std::unordered_map<std::string, const std::optional<double>*> valueMap;
 
         // Moteus Driver Resolution/Format
-        mjbots::moteus::PositionMode::Format format; // command format
-        mjbots::moteus::PositionMode::Command command;
+        mjbots::moteus::PositionMode::Format format{}; // command format
+        mjbots::moteus::PositionMode::Command command{};
 
         explicit CommandState(const CommandStateParams& p);
 
@@ -144,7 +154,7 @@ namespace MoteusAPI {
         std::unordered_map<std::string, Param*> paramMap;
 
         // Moteus Driver Resolution/Format
-        mjbots::moteus::Query::Format format;
+        mjbots::moteus::Query::Format format{};
 
         explicit ReadState(const ReadStateParams& p);
 
@@ -173,6 +183,11 @@ namespace MoteusAPI {
 
         std::unique_ptr<mjbots::moteus::Controller> internal_controller;
 
+        double max_moteus_current = 0;
+        double max_motor_current = 0;
+        double max_d_current = 0;
+        int violation_limit_ms = 0;
+        
         explicit Controller(
             int moteus_id = 1,
             std::string socketcan_iface = "can0",
@@ -201,11 +216,15 @@ namespace MoteusAPI {
 
         void write(const CommandState& cs);
 
-        void writeDuration(const CommandState& cs, int duration_ms);
+        void writeDuration(const CommandState& cs, int duration_ms, bool safety = true, bool display = false);
 
         std::string diagnosticCommand(std::string);
 
         void setZeroOffset();
+
+        void configureSafety(double max_motor_current, double max_moteus_current = 12, double max_d_current = 5, double violation_limit_ms = 100);
+
+        ViolationStats checkSafety(ReadState& rs);
     };
 
 } // namespace MoteusAPI

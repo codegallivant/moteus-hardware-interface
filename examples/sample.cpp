@@ -15,7 +15,6 @@ int main() {
     MoteusAPI::Controller* controller1 = MoteusAPI::Controller::create(1, "can0");
     MoteusAPI::Controller* controller2 = MoteusAPI::Controller::create(2, "can0");
 
-
     // Specify which parameters should be read
     MoteusAPI::ReadState rs({
         .d_current = true,

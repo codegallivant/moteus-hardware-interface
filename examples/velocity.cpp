@@ -13,7 +13,7 @@ int main() {
     // Important to ensure all servos are stopped upon any termination signal 
     std::signal(SIGINT, signal_handler);
 
-    MoteusAPI::Controller* controller = MoteusAPI::Controller::create(1, "can0");
+    MoteusAPI::Controller* controller = MoteusAPI::Controller::create(11, "can0");
 
     // Specify which parameters should be read
     MoteusAPI::ReadState rs({
@@ -25,7 +25,7 @@ int main() {
         .kp_scale = 0.1,
         .kd_scale = 0.1,
         .position = std::numeric_limits<double>::quiet_NaN(),
-        .velocity = 2.0,
+        .velocity = 2.0
     });
     int duration_ms = 20000;
     auto start_time = std::chrono::high_resolution_clock::now();

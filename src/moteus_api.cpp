@@ -307,23 +307,96 @@ bool Controller::write(const CommandState& cs, ReadState& rs) {
     return true;
 }
 
+void Controller::configureSafety(double max_motor_current, double max_moteus_current, double max_d_current, double violation_limit_ms) {
+    this->max_motor_current = max_motor_current;
+    this->max_moteus_current = max_moteus_current;
+    this->max_d_current = max_d_current;
+    this->violation_limit_ms = violation_limit_ms;
+}
+
+ViolationStats Controller::checkSafety(ReadState& rs) {
+    ViolationStats vstats;
+    vstats.current = sqrt(pow(rs.getValues()["q_current"]->value(),2) + pow(rs.getValues()["d_current"]->value(),2));
+    vstats.motor_current_condition = (vstats.current > (0.7*max_motor_current)) && max_motor_current != 0;;
+    vstats.moteus_current_condition = (vstats.current > max_moteus_current) && max_moteus_current != 0;
+    vstats.d_current_condition  = (rs.getValues()["d_current"]->value() > max_d_current) && max_d_current != 0;
+    vstats.fault_condition = rs.getValues()["fault"]->value() > 0;
+    vstats.result = vstats.motor_current_condition || vstats.moteus_current_condition || vstats.d_current_condition || vstats.fault_condition;
+    return vstats;
+}
+
 void Controller::write(const CommandState& cs) {
     internal_controller->SetPosition(cs.command, &cs.format);
 }
 
-void Controller::writeDuration(const CommandState& cs, int duration_ms) {
+void Controller::writeDuration(const CommandState& cs, int duration_ms, bool safety, bool display) {
     auto start_time = std::chrono::high_resolution_clock::now();
-    int count = 0;
     int elapsed = 0;
+
+    int write_count = 0;
+
+    double violation_elapsed = 0;
+
+    ReadState rs({
+        .d_current = true,
+        .fault = true,
+        .motor_temperature = true,
+        .q_current = true,
+        .temperature = true,
+        .torque = true,
+        .velocity = true,
+        .voltage = true
+    });
+
     while (elapsed < duration_ms) {
+
         auto t0 = std::chrono::high_resolution_clock::now();
-        write(cs);
+
+        if(safety || display) {
+            bool status = this->write(cs, rs);
+            if(!status) {
+                std::cout << "Failed to read" << std::endl;
+                break;
+            }
+        } else {
+            this->write(cs);
+        }
+
         auto t1 = std::chrono::high_resolution_clock::now();
-        count++;
-        elapsed += std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+
+        write_count++;
+
+        double this_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        elapsed += this_elapsed;
+
+        if(display) {
+            std::cout << "Read State:" << std::endl;
+            rs.display();
+            std::cout << std::endl;
+        }
+
+        if(safety) {
+
+            ViolationStats vstats = this->checkSafety(rs);
+            if(vstats.result) {
+                violation_elapsed += this_elapsed;
+                if(violation_elapsed > violation_limit_ms) {
+                    std::cout << "Violated conditions for more than " << violation_limit_ms << "ms" << std::endl;
+                    break;
+                }
+            } else {
+                if(violation_elapsed > 0) {
+                    violation_elapsed -= this_elapsed;
+                }
+                if(violation_elapsed < 0) {
+                    violation_elapsed = 0;
+                }
+            }
+
+        }
     }
     std::cout << "Control Frequency (writes/s): "
-              << count / (elapsed / 1000.0) << std::endl;
+              << write_count / (elapsed / 1000.0) << std::endl;
 }
 
 std::string Controller::diagnosticCommand(std::string message) {
