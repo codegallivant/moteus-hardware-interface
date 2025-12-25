@@ -90,8 +90,6 @@ void CommandState::calculateCommand() {
         auto value = *valueMap[key];
         if (value.has_value()) {
             *cmdPtr = value.value();
-        } else {
-            *cmdPtr = std::numeric_limits<double>::quiet_NaN();
         }
     }
 }
@@ -319,9 +317,9 @@ void Controller::configureSafety(double max_motor_current, double max_moteus_cur
 ViolationStats Controller::checkSafety(ReadState& rs) {
     ViolationStats vstats;
     vstats.current = sqrt(pow(rs.getValues()["q_current"]->value(),2) + pow(rs.getValues()["d_current"]->value(),2));
-    vstats.motor_current_condition = (vstats.current > (0.7*max_motor_current)) && max_motor_current != 0;;
-    vstats.moteus_current_condition = (vstats.current > max_moteus_current) && max_moteus_current != 0;
-    vstats.d_current_condition  = (rs.getValues()["d_current"]->value() > max_d_current) && max_d_current != 0;
+    vstats.motor_current_condition = (std::abs(vstats.current) > (0.7*max_motor_current)) && max_motor_current != 0;;
+    vstats.moteus_current_condition = (std::abs(vstats.current) > max_moteus_current) && max_moteus_current != 0;
+    vstats.d_current_condition  = (std::abs(rs.getValues()["d_current"]->value()) > max_d_current) && max_d_current != 0;
     vstats.fault_condition = rs.getValues()["fault"]->value() > 0;
     vstats.result = vstats.motor_current_condition || vstats.moteus_current_condition || vstats.d_current_condition || vstats.fault_condition;
     return vstats;
@@ -331,10 +329,8 @@ void Controller::write(const CommandState& cs) {
     internal_controller->SetPosition(cs.command, &cs.format);
 }
 
-void Controller::writeDuration(const CommandState& cs, int duration_ms, bool safety, bool display) {
-    auto start_time = std::chrono::high_resolution_clock::now();
+void Controller::writeDuration(const CommandState& cs, int duration_ms, bool safety, bool display, int interval_ms) {
     int elapsed = 0;
-
     int write_count = 0;
 
     double violation_elapsed = 0;
@@ -350,27 +346,19 @@ void Controller::writeDuration(const CommandState& cs, int duration_ms, bool saf
         .voltage = true
     });
 
+    bool status = this->write(cs, rs);
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     while (elapsed < duration_ms) {
 
-        auto t0 = std::chrono::high_resolution_clock::now();
-
         if(safety || display) {
-            bool status = this->write(cs, rs);
             if(!status) {
                 std::cout << "Failed to read" << std::endl;
                 break;
             }
-        } else {
-            this->write(cs);
         }
-
-        auto t1 = std::chrono::high_resolution_clock::now();
-
-        write_count++;
-
-        double this_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-        elapsed += this_elapsed;
-
+            
         if(display) {
             std::cout << "Read State:" << std::endl;
             rs.display();
@@ -381,14 +369,14 @@ void Controller::writeDuration(const CommandState& cs, int duration_ms, bool saf
 
             ViolationStats vstats = this->checkSafety(rs);
             if(vstats.result) {
-                violation_elapsed += this_elapsed;
+                violation_elapsed += interval_ms;
                 if(violation_elapsed > violation_limit_ms) {
                     std::cout << "Violated conditions for more than " << violation_limit_ms << "ms" << std::endl;
                     break;
                 }
             } else {
                 if(violation_elapsed > 0) {
-                    violation_elapsed -= this_elapsed;
+                    violation_elapsed -= interval_ms;
                 }
                 if(violation_elapsed < 0) {
                     violation_elapsed = 0;
@@ -396,7 +384,14 @@ void Controller::writeDuration(const CommandState& cs, int duration_ms, bool saf
             }
 
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
     }
+
     std::cout << "Control Frequency (writes/s): "
               << write_count / (elapsed / 1000.0) << std::endl;
 }

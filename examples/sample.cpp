@@ -34,25 +34,18 @@ int main() {
     rs.display();
 
 
-    // Sending constant velocity command for 5 seconds to both controllers
-    auto start_time = std::chrono::high_resolution_clock::now();
-    int elapsed_time_count = 0;
-    while(elapsed_time_count <= 5000) {
-        
-        MoteusAPI::CommandState cs({
-            .kp_scale = 0.1,
-            .kd_scale = 0.1,
-            .position = std::numeric_limits<double>::quiet_NaN(),
-            .velocity = 2.0,
-        });
-        
-        controller1->write(cs);
-        controller2->write(cs);
+    // Sending constant velocity command for 5000ms to both controllers        
+    MoteusAPI::CommandState cs({
+        .kp_scale = 0.1,
+        .kd_scale = 0.1,
+        .position = std::numeric_limits<double>::quiet_NaN(),
+        .velocity = 2.0,
+    });
+    
+    controller1->writeDuration(cs, 5000);
+    controller2->writeDuration(cs, 5000);
 
-        // Can also write and fetch read response
-        // controller->write(cs, rs);
-
-        auto current_time = std::chrono::high_resolution_clock::now();
-        elapsed_time_count += std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
-    }
+    // Can also write and fetch read response
+    controller1->write(cs, rs);
+    controller2->write(cs, rs);
 }

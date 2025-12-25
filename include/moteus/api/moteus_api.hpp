@@ -216,7 +216,7 @@ namespace MoteusAPI {
 
         void write(const CommandState& cs);
 
-        void writeDuration(const CommandState& cs, int duration_ms, bool safety = true, bool display = false);
+        void writeDuration(const CommandState& cs, int duration_ms, bool safety = true, bool display = false, int interval_ms = 10);
 
         std::string diagnosticCommand(std::string);
 

@@ -20,29 +20,24 @@ int main() {
         .velocity = true,
     });
 
-    // Velocity control
+    // Pure velocity control
     MoteusAPI::CommandState cs({
-        .kp_scale = 0.1,
+        // .feedforward_torque = 0.1,
+        .kp_scale = 0.0,
         .kd_scale = 0.1,
-        .position = std::numeric_limits<double>::quiet_NaN(),
+        .maximum_torque = 1.67,
+        // .watchdog_timeout = 200
         .velocity = 2.0
     });
-    int duration_ms = 20000;
-    auto start_time = std::chrono::high_resolution_clock::now();
-    int count = 0;
-    int elapsed = 0;
-    while (elapsed < duration_ms) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        bool read_status = controller->write(cs, rs);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        count++;
-        elapsed += std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-        if(rs.getValues()["velocity"]->has_value() && read_status) {
-            std::cout << "Read velocity: " << rs.getValues()["velocity"]->value() << std::endl;
-        } else {
-            std::cout << "Could not read velocity" << std::endl;
-        }
-    }
-    std::cout << "Control Frequency (writes/s): "
-              << count / (elapsed / 1000.0) << std::endl;
+
+    double max_motor_current = 40; // 40A max continuous phase current
+    double max_moteus_current = 12; // 12A max continuous phase current
+    double max_d_current = 5; // d_current should be near 0
+    double violation_limit_ms = 100; // max ms of violation allowed
+
+    controller->setZeroOffset();
+    controller->configureSafety(max_motor_current, max_moteus_current, max_d_current, violation_limit_ms);
+    controller->writeDuration(cs, 5000, true, true);
+
+    std::cout << std::endl;
 }
